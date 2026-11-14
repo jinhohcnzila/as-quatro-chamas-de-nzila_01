@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>As Quatro Chamas de Nzila — Vertical Slice v1.3</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="wrap">
+  <canvas id="game" tabindex="0" aria-label="As Quatro Chamas de Nzila, Prólogo em Vila Raiz"></canvas>
+  <div id="aria-live" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);"></div>
+  <div id="pad" aria-hidden="true">
+    <div class="dpad">
+      <button data-k="u">▲</button>
+      <button data-k="l">◀</button>
+      <button data-k="d">▼</button>
+      <button data-k="r">▶</button>
+    </div>
+    <button id="act" data-k="a">A</button>
+  </div>
+</main>
+<script src="game.js"></script>
+</body>
+</html>

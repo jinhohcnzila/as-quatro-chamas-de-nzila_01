@@ -1,0 +1,873 @@
+'use strict';
+/* AS QUATRO CHAMAS DE NZILA — Vertical Slice v1.3
+   100% offline. Roda em Chrome/Edge desktop e Android via file://.
+   Base canônica: Master Bible v1.0. */
+
+const HERO = { name: 'Akin' };
+const NAME = HERO.name;
+const COMPANHIA = 'Companhia dos Registros Limpos';
+
+const VW = 320, VH = 180, TS = 16;
+let MW = 30, MH = 20;
+const FONT = 'bold 8px "Courier New",monospace';
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+cv.width = VW; cv.height = VH; ctx.imageSmoothingEnabled = false;
+const lc = document.createElement('canvas'); lc.width = VW; lc.height = VH;
+const lx = lc.getContext('2d');
+const ariaLive = document.getElementById('aria-live');
+
+const SETTINGS = { textScale: 1, reduceMotion: false, visualMetronome: true, autoSave: true };
+function loadSettings() { try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem('nzila_settings') || '{}')); } catch(e) {} }
+function saveSettings() { try { localStorage.setItem('nzila_settings', JSON.stringify(SETTINGS)); } catch(e) {} }
+loadSettings();
+
+const sin = x => SETTINGS.reduceMotion ? 0 : Math.sin(x);
+const announce = s => { if (ariaLive) { ariaLive.textContent = ''; setTimeout(() => { ariaLive.textContent = s; }, 50); } };
+
+const FIRES = [
+  { n:'Memória',        c:'#f0a830', d:'O fogo âmbar sobe devagar e cheira a coisa guardada.' },
+  { n:'Ancestralidade', c:'#8fbf4a', d:'O fogo verde-musgo estala como raiz seca. Alguém antigo parece sorrir.' },
+  { n:'Destino',        c:'#4a7cf0', d:'O fogo azul treme como estrada ao longe. Para onde ele aponta?' },
+  { n:'Identidade',     c:'#e8431f', d:'O fogo vermelho-brasa responde ao seu tambor. É quase um nome.' }
+];
+
+const PAL = {
+  akin: { skin:'#7a4a2e', hair:'#1a120c', shirt:'#b4472a', pants:'#3a3550', acc:'#e8431f', patch:1 },
+  mab:  { skin:'#6b3f27', hair:'#e6e6e6', shirt:'#2f4f7a', pants:'#2f4f7a', wrap:'#e0a030', skirt:1 },
+  lek:  { skin:'#5e3822', hair:'#eeeeee', shirt:'#7a2f2f', pants:'#4a3a2a', beard:1 },
+  tuti: { skin:'#7a4a2e', hair:'#1a120c', shirt:'#e0a030', pants:'#3a6a4a', k:1 },
+  amo:  { skin:'#8a5a3a', hair:'#1a120c', shirt:'#e8dcc0', pants:'#3a3550', wrap:'#f0a830', specs:1 },
+  ori:  { skin:'#5e3822', hair:'#cfcfcf', shirt:'#6a4a2a', pants:'#6a4a2a', beard:1, skirt:1 },
+  fis:  { skin:'#8a5a3a', hair:'#222222', shirt:'#c9ccd0', pants:'#8a8f96' }
+};
+const PORT = { 'Vó Mabeki':PAL.mab,'Baba Lekan':PAL.lek,'Tuti':PAL.tuti,'Amora':PAL.amo,'Mestre Orin':PAL.ori,'Fiscal da Companhia':PAL.fis,[NAME]:PAL.akin };
+
+let map = [], ents = [], LV = null;
+const mk = (w,h,f)=>{ MW=w; MH=h; map=new Array(w*h).fill(f); };
+const put = (x,y,c)=>{ map[y*MW+x]=c; };
+const hut = (x,y,w=3)=>{ for(let i=0;i<w;i++){ put(x+i,y,'R'); put(x+i,y+1,'H'); } put(x+(w>>1),y+1,'D'); };
+
+function buildVila() {
+  mk(30,20,'.');
+  for (let x=0;x<MW;x++){ put(x,0,'T'); put(x,MH-1,'T'); }
+  for (let y=0;y<MH;y++){ put(0,y,'T'); put(MW-1,y,'T'); }
+  for (let y=7;y<MH-1;y++) for (let x=14;x<16;x++) put(x,y,',');
+  for (let y=8;y<15;y++) for (let x=7;x<23;x++) put(x,y,',');
+  for (let y=4;y<7;y++) for (let x=14;x<16;x++) put(x,y,'B');
+  for (let y=1;y<4;y++) for (let x=12;x<18;x++) put(x,y,'C');
+  [[3,3],[23,3],[3,9],[24,9],[3,15],[24,15]].forEach(([x,y])=>hut(x,y));
+  [[6,5],[26,7],[11,17],[19,17],[2,13],[27,12]].forEach(([x,y])=>put(x,y,'T'));
+  ents = [
+    { id:'mab',  k:'npc',  x:13.5*TS, y:8.6*TS,  p:PAL.mab,  d:0 },
+    { id:'lek',  k:'npc',  x:18.2*TS, y:8.3*TS,  p:PAL.lek,  d:2 },
+    { id:'tuti', k:'npc',  x:10.5*TS, y:12.4*TS, p:PAL.tuti, d:3 },
+    { id:'bao',  k:'sign', x:15*TS,   y:7.4*TS },
+    { id:'tambor_v', k:'tambor', x:20*TS, y:17*TS },
+    { id:'f0', k:'fire', i:0, x:8.5*TS,  y:9.5*TS },
+    { id:'f1', k:'fire', i:1, x:21.5*TS, y:9.5*TS },
+    { id:'f2', k:'fire', i:2, x:8.5*TS,  y:13.5*TS },
+    { id:'f3', k:'fire', i:3, x:21.5*TS, y:13.5*TS }
+  ];
+  return { id:'vila', name:'Vila Raiz', lamps:[] };
+}
+function buildPorto() {
+  mk(26,16,'=');
+  for (let x=0;x<MW;x++){ put(x,0,'T'); for(let y=13;y<MH;y++) put(x,y,'~'); }
+  for (let y=0;y<MH;y++){ put(0,y,'T'); put(MW-1,y,'T'); }
+  for (let y=13;y<MH;y++){ put(12,y,'='); put(13,y,'='); }
+  hut(2,1,5); hut(9,1,5); hut(17,1,7); hut(2,7,4); hut(20,8,5);
+  ents = [
+    { id:'ori',  k:'npc',  x:15.5*TS, y:5.5*TS, p:PAL.ori, d:0 },
+    { id:'fis',  k:'npc',  x:6*TS,    y:5.5*TS, p:PAL.fis, d:3 },
+    { id:'pos',  k:'sign', x:11.5*TS, y:3.4*TS },
+    { id:'arq',  k:'sign', x:20.5*TS, y:3.5*TS },
+    { id:'buzio',k:'sign', x:18*TS,   y:10*TS },
+    { id:'tambor_p', k:'tambor', x:22*TS, y:11*TS }
+  ];
+  if (!S.foeDown)  ents.push({ id:'foe',  k:'foe', x:9.5*TS,  y:10*TS });
+  if (!S.esvaDown) ents.push({ id:'esva', k:'foe', x:19*TS,   y:8*TS });
+  return { id:'porto', name:'Porto das Vozes', lamps:[[7*TS,4*TS],[15.5*TS,3*TS],[24*TS,5*TS],[6*TS,11*TS],[19*TS,11*TS]] };
+}
+
+const S = { mode:'title', t:0, stage:0, fires:[0,0,0,0], dlg:null, near:null, fade:0, white:0,
+  msg:'', msgT:0, banner:0, memoria:{ vila:100, porto:35 },
+  arautoDown:false, reminiscenciaVista:false, saved:false,
+  pauseState:'main', pauseSel:0, optSel:0 };
+const P = { x:0, y:0, d:1, a:0, mv:false, tr:[] };
+const cam = { x:0, y:0 };
+let CX=0, CY=0;
+const lit = ()=> S.fires.filter(Boolean).length;
+const clampCam = ()=>{ cam.x=Math.max(0,Math.min(MW*TS-VW,cam.x)); cam.y=Math.max(0,Math.min(MH*TS-VH,cam.y)); };
+
+function loadLevel(id,x,y) {
+  LV = id==='vila' ? buildVila() : buildPorto();
+  Object.assign(P,{ x, y, d:1, a:0, mv:false, tr:[{x,y:y+6,d:1}] });
+  cam.x=P.x-VW/2; cam.y=P.y-VH/2; clampCam(); S.near=null;
+  if (SETTINGS.autoSave) autoSave('checkpoint');
+}
+function reset() {
+  Object.assign(S,{ mode:'title', stage:0, fires:[0,0,0,0], dlg:null, near:null, fade:0, white:0,
+    msg:'', msgT:0, banner:0, book:{}, amora:false, foeDown:false, esvaDown:false,
+    arautoDown:false, reminiscenciaVista:false, memoria:{vila:100,porto:35}, saved:false,
+    pauseState:'main', pauseSel:0, optSel:0 });
+  A.step=0; if (A.ctx) A.next=A.ctx.currentTime+0.1; C=null;
+  loadLevel('vila', 14.5*TS, 17.5*TS);
+}
+function go(id,x,y){ loadLevel(id,x,y); S.white=0; S.fade=1; S.banner=4; S.mode='play'; }
+const toast = s=>{ S.msg=s; S.msgT=3; };
+
+const BOOK_TOTAL = 26;
+const nomes = ()=> Object.keys(S.book).length;
+function reg(n) {
+  if (S.book[n]) return;
+  S.book[n]=1;
+  if (LV && LV.id==='porto') S.memoria.porto = Math.min(100, S.memoria.porto+10);
+  if (LV && LV.id==='vila')  S.memoria.vila  = Math.min(100, S.memoria.vila+5);
+  toast('Livro de Nomes: '+n);
+}
+
+function autoSave(reason) {
+  if (!SETTINGS.autoSave && reason==='checkpoint') return;
+  try {
+    localStorage.setItem('nzila_save_v1', JSON.stringify({
+      v:1, stage:S.stage, fires:[...S.fires], book:{...S.book}, amora:S.amora,
+      foeDown:S.foeDown, esvaDown:S.esvaDown, arautoDown:S.arautoDown,
+      reminiscenciaVista:S.reminiscenciaVista, memoria:{...S.memoria},
+      level:LV ? LV.id : 'vila'
+    }));
+    S.saved=true;
+    if (reason==='manual') toast('Salvo no Tambor de Travessia.');
+    else if (reason==='checkpoint') toast('Auto-salvo.');
+  } catch(e) {
+    if (reason!=='checkpoint') toast('Save indisponível — modo memória.');
+  }
+}
+function save() { autoSave('manual'); }
+function hasSave() { try { return !!localStorage.getItem('nzila_save_v1'); } catch(e){ return false; } }
+function loadSave() {
+  try {
+    const raw = localStorage.getItem('nzila_save_v1'); if (!raw) return false;
+    const d = JSON.parse(raw);
+    Object.assign(S,{
+      stage:d.stage||0, fires:d.fires||[0,0,0,0], book:d.book||{},
+      amora:!!d.amora, foeDown:!!d.foeDown, esvaDown:!!d.esvaDown,
+      arautoDown:!!d.arautoDown, reminiscenciaVista:!!d.reminiscenciaVista,
+      memoria:d.memoria||{vila:100,porto:35}
+    });
+    if (S.stage>=3 || S.amora) loadLevel('porto', 13*TS, 11.5*TS);
+    else loadLevel('vila', 14.5*TS, 17.5*TS);
+    return true;
+  } catch(e){ toast('Save corrompido — iniciando nova jornada.'); return false; }
+}
+
+const D = {
+  mab0:{ w:'Vó Mabeki', t:`${NAME}! Acorda esse tambor, menino. Hoje é a Noite das Quatro Fogueiras e a vila inteira vai dizer os nomes diante do Baobá.`, n:'mab1' },
+  mab1:{ w:'Vó Mabeki', t:'Preciso que você acenda as quatro fogueiras da praça antes de o sol sumir. Sem fogo, os nomes não ouvem.',
+    c:[{t:'Pode deixar, Vó.',n:'mab2',f:()=>{S.stage=1;}},{t:'Por que são quatro?',n:'mabWhy'}] },
+  mabWhy:{ w:'Vó Mabeki', t:'Uma para cada Chama de Nzila: Memória, Ancestralidade, Destino e Identidade. O Caminho só se abre para quem acende as quatro.', n:'mabAsk', f:()=>reg('Nzila') },
+  mabAsk:{ w:'Vó Mabeki', t:'Então? Vai acender, ou vai ficar batucando no meu ouvido?',
+    c:[{t:'Vou, Vó.',n:'mab2',f:()=>{S.stage=1;}}] },
+  mab2:{ w:'Vó Mabeki', t:'Esse é o meu menino. Lembrar dói, mas esquecer não cura. Vai com o tambor no peito e o nome na boca.' },
+  mabWait:{ w:'Vó Mabeki', t:()=>`Ainda faltam ${4-lit()} fogueiras, ${NAME}. O sol não espera ninguém.` },
+
+  cer0:{ w:'Vó Mabeki', t:`Quatro chamas acesas. Chega perto do Baobá, ${NAME}, e escuta. Hoje ele quer falar.`, n:'cer1' },
+  cer1:{ w:'', t:'Vó Mabeki respira fundo e começa a recitar: “Cipriana… Quirino… Balbina… Taú…”', n:'cer2' },
+  cer2:{ w:'', t:'Na casca do Baobá, os nomes brilham em âmbar. Então um deles se apaga. Depois outro.', n:'cer3' },
+  cer3:{ w:'Vó Mabeki', t:'…e depois… depois vinha… Quem é você, menino?', n:'cer4' },
+  cer4:{ w:NAME, t:`Vó? Sou eu. Sou o ${NAME}.`, n:'cer5' },
+  cer5:{ w:'Vó Mabeki', t:`${NAME}? Não conheço esse nome.`, n:'cer5b' },
+  cer5b:{ w:'Vó Mabeki', t:'Espera… leva o tambor, menino. Sua mãe, Dayo, também tocava. Seu nome inteiro está do outro lado do mar.',
+    n:'cer6', f:()=>{ reg('Dayo'); reg('Brasa'); } },
+  cer6:{ w:'', t:'Uma névoa branca desce. No meio dela, uma figura alta, sem rosto, se ergue: o Arauto Branco. A voz dele é a soma de todas as vozes que a vila esqueceu.', n:'cer6b' },
+  cer6b:{ w:'Arauto Branco', t:'A brasa. Me dê a brasa, menino.', n:'cer6c' },
+  cer6c:{ w:NAME, t:'Não! A vó me deu o tambor. Some daqui!', n:'cer6d' },
+  cer6d:{ w:'', t:'O tambor pequeno queima no seu peito. O Arauto avança. Não há fuga — só aparo.', e:()=>startArauto() },
+
+  arautoWin:{ w:'Arauto Branco', t:'A brasa resiste. Por hoje.', e:()=>{ S.mode='fade'; S.stage=3; } },
+  arautoLose:{ w:'', t:'O Arauto Branco recua. Algo na vila — o Baobá, talvez — o impede de terminar. A névoa some, por enquanto.', e:()=>{ S.mode='fade'; S.stage=3; } },
+
+  lek0:{ w:'Baba Lekan', t:'Sou eu quem diz os nomes na Noite das Quatro Fogueiras. Quarenta anos sem errar um. Mas ultimamente a língua tropeça…', n:'lek1' },
+  lek1:{ w:'Baba Lekan', t:'Não conta pra sua avó que eu disse isso, menino.' },
+  lekLate:{ w:'Baba Lekan', t:`Os nomes estão fugindo, ${NAME}. Dizem que o Arauto Branco foi visto na névoa. Fica perto da sua avó.` },
+
+  tuti0:{ w:'Tuti', t:`${NAME}! Toca aquele ritmo de contar formiga! Por favor, por favor!`,
+    c:[{t:'Bateu! (tocar)',n:'tutiPlay',f:()=>drum()},{t:'Depois, Tuti.',n:'tutiLater'}] },
+  tutiPlay:{ w:'', t:'Você bate um compasso no tambor pequeno: um-e-dois-e, um-e-dois-e. Tuti dança até ficar sem fôlego.', n:'tutiProm' },
+  tutiProm:{ w:'Tuti', t:'De novo amanhã? Promete? Você é o Akin Akin, o tamborileiro da vila!', c:[{t:'Prometo.'},{t:'Se a Vó deixar.'}] },
+  tutiLater:{ w:'Tuti', t:'Tá bom… mas não esquece!' },
+
+  bao0:{ w:'', t:'O Baobá-dos-Nomes. A casca guarda centenas de nomes riscados a faca. Você procura o seu e não acha. Deve ser a luz ruim.',
+    f:()=>reg('Baobá-dos-Nomes') },
+  baoLate:{ w:'', t:'Os nomes parecem mais claros… e há espaços lisos onde antes havia marcas.' },
+  fireNo:{ w:'', t:'As fogueiras esperam a ordem da Vó Mabeki. Fale com ela primeiro.' },
+  fireOn:{ w:'', t:'A fogueira já arde forte.' },
+
+  amo0:{ w:'', t:'A névoa recua. No meio da praça, uma moça de avental longo abre um caderno de capa gasta.', n:'amo1', f:()=>{ S.amora=true; } },
+  amo1:{ w:'Amora', t:`Você é o ${NAME}? Sou Amora, da Casa dos Nomes. Sua linhagem foi riscada dos nossos registros.`, n:'amo2', f:()=>reg('Amora') },
+  amo2:{ w:NAME, t:'Riscada? Minha avó acabou de esquecer quem eu sou. Se a resposta existe, está do outro lado do mar.', n:'amo3' },
+  amo3:{ w:'Amora', t:'Então começamos pela Casa dos Nomes, no Porto das Vozes. Há uma Porta de Nzila no fim da praça. Eu abro, você vem.', e:()=>{ go('porto', 13*TS, 11.5*TS); say('porto0'); reg('Casa dos Nomes'); } },
+  porto0:{ w:'Amora', t:'Porto das Vozes. Cada pedra guarda uma voz. Meu mestre, Orin, deve estar perto da Casa dos Nomes.', f:()=>reg('Porto das Vozes') },
+
+  ori0:{ w:'Mestre Orin', t:`Amora… e este rapaz. ${NAME}, não é? Esse nome… eu o conheço. Ou conhecia. As gavetas da minha cabeça estão sem etiqueta.`, n:'ori1' },
+  ori1:{ w:'Mestre Orin', t:'Sua linhagem foi riscada, filho, e não foi acidente. Alguém pediu, eu juro que alguém pediu… e não consigo lembrar quem.', n:'ori2' },
+  ori2:{ w:'Mestre Orin', t:'Desçam ao Arquivo Profundo. As gavetas lembram quando eu falho. Cuidado com as Sombras de Pó: repetem o último eco que ouvem.' },
+  oriWin:{ w:'Mestre Orin', t:'Vocês enfrentaram uma Sombra de Pó e ainda guardam o próprio nome. A porta do Arquivo está atrás de mim.' },
+  fis0:{ w:'Fiscal da Companhia', t:`${COMPANHIA}, boa noite. Alguma lembrança incomodando? Esquecer é um serviço. O primeiro registro limpo sai com desconto.`,
+    f:()=>reg('Companhia') },
+  pos0:{ w:'', t:'Cartaz: “ESQUECIMENTO DE CONFORTO. Nenhuma dor depois de um bom registro limpo.” Assinado: Dona Rasura, Auditora-Geral.', f:()=>reg('Rasura') },
+  buzio0:{ w:'Voz no Búzio', t:'Uma voz de contrato, muito educada: “Aqui é Calíope Rasura, Auditora-Geral da Companhia dos Registros Limpos. Se você ainda lembra, oferecemos apagar a dor — com recibo e sem arrependimento.”',
+    f:()=>{ reg('Rasura'); reg('Búzio'); } },
+  arq0:{ w:'', t:'A porta de bronze do Arquivo Profundo está lacrada por um selo cinza. Uma Sombra de Pó ronda a rua.' },
+  arq1:{ w:'', t:'A porta de bronze do Arquivo Profundo se abre sozinha. Do outro lado, gavetas sem fim sussurram vozes que ninguém mais lembra.', e:()=>{ S.mode='end'; } },
+  foe0:{ w:'', t:'Uma Sombra de Pó se arrasta pela rua, repetindo o último eco que ouviu. Ela nota vocês.', e:()=>startCombat({ id:'foe', k:'foe' }) },
+  foeWin:{ w:'Amora', t:'Ecos rachados são fracos a Voz. Vamos falar com o Mestre Orin.' },
+
+  esva0:{ w:'', t:'Um Esvaziado em vestes brancas vaga pela rua. Não ataca — espera. Uma chance de chamá-lo de volta.',
+    f:()=>reg('Esvaziado'), e:()=>startCombat({ id:'esva', k:'foe' }) },
+  esvaWin:{ w:'Amora', t:'Ele lembrou. Coletor — o nome dele era Coletor. Você o trouxe de volta por um instante.', f:()=>reg('Coletor') },
+
+  tamborIntro:{ w:'Tambor de Travessia', t:'Um tambor falante, vivo, espera. Se você tocar, pode salvar a jornada — ou ouvir o que ele lembra.',
+    f:()=>reg('Tambor de Travessia'),
+    c:[{t:'Salvar. (autosave)',n:'tamborSaved',f:()=>save()},{t:'Ouvir o tambor.',n:'tamborRem'}] },
+  tamborRem:{ w:'Tambor de Travessia', t:'O tambor vibra. Você não está mais na praça — está num cais. A mão de alguém grande guia a sua sobre uma pele de tambor.', n:'tamborRem2' },
+  tamborRem2:{ w:'', t:'Um-e-dois-e, três-e-quatro-e. É um compasso de despedida. Você bate sem saber de onde vem, mas o corpo sabe. Um dia, alguém te ensinou a partir.',
+    f:()=>{ S.reminiscenciaVista=true; reg('O Dia da Travessia'); reg('Juan'); },
+    c:[{t:'Salvar e seguir.',n:'tamborSaved',f:()=>save()}] },
+  tamborSaved:{ w:'Tambor de Travessia', t:'Salvo. A jornada respira.' }
+};
+
+function wrap(s,mw){
+  const size = Math.round(8 * SETTINGS.textScale);
+  ctx.font=`bold ${size}px "Courier New",monospace`;
+  const out=[]; let l='';
+  for (const w of s.split(' ')) { const t=l?l+' '+w:w; if (ctx.measureText(t).width>mw && l){ out.push(l); l=w; } else l=t; }
+  out.push(l); return out; }
+function say(id){ const nd = typeof id==='string'?D[id]:id;
+  S.dlg = { nd, lines:wrap(typeof nd.t==='function'?nd.t():nd.t, VW-32-(PORT[nd.w]?40:0)), n:0, sel:0 };
+  S.mode = 'dlg'; if (nd.f) nd.f();
+  announce(nd.w + ': ' + (typeof nd.t==='function'?nd.t():nd.t));
+}
+function endDlg(nd){ S.dlg=null; S.mode='play'; if (nd.e) nd.e(); }
+const typed = d=>d.n >= d.lines.join('').length;
+function advance(){ const d=S.dlg, nd=d.nd;
+  if (!typed(d)){ d.n=d.lines.join('').length; return; }
+  if (nd.c){ const ch=nd.c[d.sel]; if (ch.f) ch.f(); return ch.n?say(ch.n):endDlg(nd); }
+  return nd.n?say(nd.n):endDlg(nd); }
+function pick(dir){
+  if (S.mode==='cmb'){
+    if (C.ph==='menu'){ const n=combatOptions().length; C.sel=(C.sel+dir+n)%n; blip(300); }
+    else if (C.ph==='chamar_select'){ C.sel=(C.sel+dir+C.chamarOptions.length)%C.chamarOptions.length; blip(300); }
+    return;
+  }
+  if (S.mode==='pause'){
+    const n = S.pauseState==='main'?3:4;
+    if (S.pauseState==='main') S.pauseSel=(S.pauseSel+dir+n)%n;
+    else S.optSel=(S.optSel+dir+n)%n;
+    blip(300); return;
+  }
+  const d=S.dlg;
+  if (S.mode==='dlg' && d.nd.c && typed(d)){ d.sel=(d.sel+dir+d.nd.c.length)%d.nd.c.length; blip(300); }
+}
+
+function interact(e){
+  if (e.id==='ori') return say(S.foeDown?'oriWin':'ori0');
+  if (e.id==='fis') return say('fis0');
+  if (e.id==='pos') return say('pos0');
+  if (e.id==='buzio') return say('buzio0');
+  if (e.id==='arq') return say(S.foeDown?'arq1':'arq0');
+  if (e.id==='foe') return say('foe0');
+  if (e.id==='esva') return say('esva0');
+  if (e.id==='mab'){ reg('Mabeki'); return say(S.stage===0?'mab0':S.stage===1?'mabWait':'cer0'); }
+  if (e.id==='lek'){ reg('Lekan'); return say(S.stage>=2?'lekLate':'lek0'); }
+  if (e.id==='tuti'){ reg('Tuti'); return say('tuti0'); }
+  if (e.id==='bao') return say(S.stage>=2?'baoLate':'bao0');
+  if (e.k==='tambor') return say('tamborIntro');
+  if (e.k==='fire'){ const F=FIRES[e.i];
+    if (S.stage<1) return say('fireNo');
+    if (S.fires[e.i]) return say('fireOn');
+    return say({ w:'', t:`Você acende a Fogueira da ${F.n}. ${F.d}`, f:()=>{
+      S.fires[e.i]=1; drum();
+      if (lit()===4){ S.stage=2; toast('As quatro fogueiras ardem. Fale com a Vó Mabeki.'); }
+      else toast(`Fogueiras ${lit()}/4`);
+    }});
+  }
+}
+
+const K={u:0,d:0,l:0,r:0,run:0};
+const KEYS={ ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d',ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ShiftLeft:'run',ShiftRight:'run' };
+function action(){
+  if (S.mode==='title'){ S.mode='play'; S.fade=1; S.banner=4; return; }
+  if (S.mode==='end'){ reset(); S.mode='play'; S.fade=1; S.banner=4; return; }
+  if (S.mode==='cmb') return cmbAction();
+  if (S.mode==='dlg') return advance();
+  if (S.mode==='pause') return pauseAction();
+  if (S.mode==='play' && S.near) interact(S.near);
+}
+function pauseAction(){
+  if (S.pauseState==='main'){
+    if (S.pauseSel===0){ S.mode='play'; }
+    else if (S.pauseSel===1){ S.pauseState='settings'; S.optSel=0; }
+    else if (S.pauseSel===2){ S.mode='title'; S.pauseState='main'; S.pauseSel=0; }
+  } else {
+    if (S.optSel===0){ SETTINGS.textScale = SETTINGS.textScale===1?1.25:SETTINGS.textScale===1.25?1.5:1; saveSettings(); }
+    else if (S.optSel===1){ SETTINGS.reduceMotion = !SETTINGS.reduceMotion; saveSettings(); }
+    else if (S.optSel===2){ SETTINGS.visualMetronome = !SETTINGS.visualMetronome; saveSettings(); }
+    else if (S.optSel===3){ S.pauseState='main'; S.pauseSel=0; return; }
+    blip(420);
+  }
+}
+addEventListener('keydown', ev=>{
+  audioInit();
+  if (ev.code==='Escape'){
+    ev.preventDefault();
+    if (S.mode==='play'){ S.mode='pause'; S.pauseState='main'; S.pauseSel=0; }
+    else if (S.mode==='pause'){ S.mode='play'; }
+    return;
+  }
+  if (S.mode==='title' && ev.code==='KeyC' && hasSave()){
+    if (loadSave()){ S.mode='play'; S.fade=1; S.banner=4; toast('Save carregado.'); }
+    return;
+  }
+  const k=KEYS[ev.code];
+  if (k){ K[k]=1; ev.preventDefault(); if (!ev.repeat){ if (k==='u') pick(-1); if (k==='d') pick(1); } return; }
+  if (ev.code==='Space'||ev.code==='Enter'||ev.code==='KeyE'){ ev.preventDefault(); if (!ev.repeat) action(); }
+  if (ev.code==='KeyH'){ ASSIST=!ASSIST; toast(ASSIST?'Aparo ampliado':'Aparo padrão'); }
+  if (ev.code==='KeyM'){ A.on=!A.on; if (A.on&&A.ctx) A.next=A.ctx.currentTime+0.1; toast(A.on?'Música ligada':'Música desligada'); }
+});
+addEventListener('keyup', ev=>{ const k=KEYS[ev.code]; if (k) K[k]=0; });
+addEventListener('blur', ()=>{ for (const k in K) K[k]=0; });
+document.querySelectorAll('[data-k]').forEach(b=>{
+  const k=b.dataset.k;
+  b.addEventListener('pointerdown', ev=>{ ev.preventDefault(); audioInit();
+    if (k==='a') action(); else { K[k]=1; if (k==='u') pick(-1); if (k==='d') pick(1); } });
+  ['pointerup','pointerleave','pointercancel'].forEach(t=> b.addEventListener(t, ()=>{ if (k!=='a') K[k]=0; }));
+});
+cv.addEventListener('pointerdown', ()=>{ audioInit(); if (S.mode!=='play') action(); });
+cv.focus();
+
+const A={ ctx:null, on:true, step:0, next:0 };
+function audioInit(){ if (A.ctx) return;
+  try { A.ctx = new (window.AudioContext||window.webkitAudioContext)(); A.next=A.ctx.currentTime+0.1; setInterval(sched,30); } catch(e){ A.ctx=null; } }
+function tone(type,f0,f1,t,dur,vol){ const c=A.ctx, o=c.createOscillator(), g=c.createGain();
+  o.type=type; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.02); }
+function sched(){ if (!A.ctx||!A.on||S.mode==='title') return;
+  const sp=60/96/4, bass=[82.4,82.4,98,110];
+  while (A.next < A.ctx.currentTime+0.15){
+    const s=A.step%16, t=A.next+(s%2?sp*0.3:0), n=lit();
+    if ([0,3,6,9,12,14].includes(s)) tone('sine', s%4?190:150, s%4?110:70, t, 0.16, 0.2);
+    if (S.stage>=1 && s%4===0){ const f=bass[(A.step>>4)%4]; tone('triangle',f,f*0.98,t,sp*3.4,0.17); }
+    if (n>=2 && s%2) tone('square',6000,5000,t,0.03,0.015);
+    if (n>=3 && (s===0||s===8)){ tone('sine',329.6,329.6,t,sp*7,0.05); tone('sine',392,392,t,sp*7,0.04); }
+    A.next += sp; A.step++;
+  }
+}
+function blip(f){ if (A.ctx&&A.on) tone('square',f,f*0.9,A.ctx.currentTime,0.05,0.04); }
+function drum(){ if (A.ctx&&A.on) [0,0.11,0.22].forEach((o,i)=> tone('sine',220-i*30,90,A.ctx.currentTime+o,0.14,0.25)); }
+
+const solid = c=>'TBCHRD~'.includes(c);
+const tileAt = (px,py)=>{ const tx=Math.floor(px/TS), ty=Math.floor(py/TS);
+  return tx<0||ty<0||tx>=MW||ty>=MH?'T':map[ty*MW+tx]; };
+function hit(x,y){
+  for (const [dx,dy] of [[-4,-3],[4,-3],[-4,0],[4,0]]) if (solid(tileAt(x+dx,y+dy))) return true;
+  for (const e of ents) if (e.k!=='sign' && e.k!=='tambor' && Math.abs(x-e.x)<9 && Math.abs(y-e.y)<5) return true;
+  return false;
+}
+function update(dt){
+  S.t += dt;
+  if (S.fade>0) S.fade=Math.max(0,S.fade-dt*0.8);
+  if (S.msgT>0) S.msgT-=dt;
+  if (S.banner>0) S.banner-=dt;
+
+  if (S.mode==='play'){
+    let dx=K.r-K.l, dy=K.d-K.u;
+    P.mv = !!(dx||dy);
+    if (P.mv){
+      if (dx&&dy){ dx*=0.7071; dy*=0.7071; }
+      const sp=(K.run?95:58)*dt, nx=P.x+dx*sp, ny=P.y+dy*sp;
+      if (!hit(nx,P.y)) P.x=nx;
+      if (!hit(P.x,ny)) P.y=ny;
+      P.d = Math.abs(dx)>Math.abs(dy) ? (dx<0?2:3) : (dy<0?1:0);
+      P.a += dt*(K.run?11:8);
+      P.tr.push({x:P.x,y:P.y,d:P.d}); if (P.tr.length>40) P.tr.shift();
+    } else P.a=0;
+    let best=null, bd=26*26;
+    for (const e of ents){ const d=(e.x-P.x)**2+(e.y-P.y)**2; if (d<bd){ bd=d; best=e; } }
+    S.near=best;
+    if (best && best.k==='npc'){ const ax=P.x-best.x, ay=P.y-best.y;
+      best.d = Math.abs(ax)>Math.abs(ay) ? (ax<0?2:3) : (ay<0?1:0); }
+  } else S.near=null;
+
+  if (S.mode==='dlg'){ const d=S.dlg, tot=d.lines.join('').length;
+    if (d.n<tot){ const o=Math.floor(d.n); d.n=Math.min(tot,d.n+dt*42);
+      if (Math.floor(d.n)!==o && o%2===0) blip(d.nd.w===NAME?260:d.nd.w==='Vó Mabeki'?170:210); } }
+  if (S.mode==='fade'){ S.white=Math.min(1,S.white+dt*0.35); if (S.white>=1) say('amo0'); }
+  if (S.mode==='cmb') updCombat(dt);
+
+  cam.x += (P.x-VW/2-cam.x)*Math.min(1,dt*6);
+  cam.y += (P.y-10-VH/2-cam.y)*Math.min(1,dt*6);
+  clampCam();
+}
+
+const PARRY_FR=8, TELE=0.5, HERO_N=['Akin','Amora'];
+let ASSIST=false, C=null;
+const parryWin = ()=> (ASSIST?15:PARRY_FR)/60;
+const addEco = n=>{ C.eco=Math.max(0,Math.min(4,C.eco+n)); };
+const nextTarget = ()=>{ const t=C.round%2; return C.hp[t]>0?t:1-t; };
+
+function startCombat(foe){
+  let kind='sombra', eh=60, foeDmg=7, res='Sua vez: escolha uma ação.';
+  if (foe.id==='arauto'){ kind='arauto'; eh=100; foeDmg=10; res='O Arauto Branco ergue a mão sem rosto.'; }
+  else if (foe.id==='esva'){ kind='esva'; eh=40; foeDmg=5; res='Um Esvaziado vaga em silêncio. Você pode chamá-lo.'; }
+  C = { hp:[40,32], max:[40,32], eco:0, eh, emax:eh, beat:0, ph:'menu', sel:0, t:0, last:0,
+    res, tgt:0, round:0, foe, kind, foeDmg, chamarTries:0, actions:[], floats:[] };
+  S.mode='cmb';
+}
+function startArauto(){ startCombat({ id:'arauto', k:'foe' }); }
+
+function combatOptions(){
+  const opts=[];
+  if (C.beat===0){
+    opts.push({ key:'golpe', label:'Golpe (Pele)', dmg:8 });
+    if (C.eco>=2) opts.push({ key:'repique', label:'Repique e Replay (2 Eco)', dmg:24, eco:2, adv:2 });
+  } else if (C.beat===1){
+    opts.push({ key:'voz', label:'Voz (Amora)', dmg:9 });
+    if (C.eco>=1 && C.last>0) opts.push({ key:'replay', label:`Replay (1 Eco) → ${C.last}`, dmg:C.last, eco:1 });
+  }
+  if (C.eco>=4) opts.push({ key:'roda', label:'RODA DAS QUATRO CHAMAS', dmg:50, eco:4, adv:2 });
+  if (C.kind==='esva' && C.chamarTries<2) opts.push({ key:'chamar', label:'Chamar pelo nome' });
+  return opts;
+}
+function floatDmg(x, y, text, color){ C.floats.push({ x, y, text, color, life:1.0 }); }
+
+function cmbAction(){
+  if (C.ph==='menu'){
+    const opts = combatOptions();
+    const o = opts[C.sel]; if (!o) return;
+    if (o.key==='chamar'){
+      C.ph='chamar_select'; C.sel=0;
+      C.chamarOptions=['Peregrino','Coletor','Mãe de Branco'];
+      C.chamarCorrect=1;
+      C.chamarTries++;
+      return;
+    }
+    if (o.eco && C.eco<o.eco){ C.res='Eco insuficiente.'; blip(120); return; }
+    let dmg=o.dmg, adv=o.adv||1, msg='';
+    if (o.eco) addEco(-o.eco);
+    if (o.key==='golpe') msg=`Akin bate o tambor: ${dmg} de dano.`;
+    else if (o.key==='repique') msg=`Repique e Replay! ${dmg} de dano.`;
+    else if (o.key==='voz') msg=`Amora canta contra o eco: ${dmg} de dano.`;
+    else if (o.key==='replay') msg=`Replay! ${dmg} de dano.`;
+    else if (o.key==='roda') msg=`RODA DAS QUATRO CHAMAS! ${dmg} de dano devastador.`;
+
+    if (o.key==='voz' && C.actions[0]==='golpe'){
+      dmg+=5; addEco(1);
+      msg += ' CORRENTE: Repique e Replay! +5.';
+    }
+    C.actions.push(o.key);
+    C.last=dmg;
+    C.eh=Math.max(0, C.eh-dmg);
+    floatDmg(252, 70, '-'+dmg, '#ffd36a');
+    C.res=msg; C.beat+=adv; C.ph='anim'; C.t=0;
+    drum();
+    return;
+  }
+  if (C.ph==='chamar_select'){
+    if (C.sel===C.chamarCorrect){
+      C.eh=0; C.res='Você chama o nome certo. O Esvaziado para. Lembra.'; C.ph='anim'; C.t=0;
+      if (A.ctx&&A.on) tone('sine', 440, 660, A.ctx.currentTime, 0.3, 0.12);
+    } else {
+      C.hp[C.tgt]=Math.max(0, C.hp[C.tgt]-8);
+      floatDmg(C.tgt?50:76, C.tgt?100:90, '-8', '#e8431f');
+      C.res='Nome errado. O Esvaziado ataca com força. -8.';
+      blip(90);
+      if (C.chamarTries>=2){ C.ph='menu'; C.res+=' O Esvaziado teima — terá que lutar.'; }
+      else { C.ph='res'; C.t=0; }
+    }
+    return;
+  }
+  if (C.ph==='tele') resolveParry(C.t>=TELE && C.t<=TELE+parryWin(), C.t<TELE?'Cedo demais.':'Tarde demais.');
+}
+function resolveParry(ok, why){
+  if (C.ph!=='tele') return;
+  if (ok){
+    addEco(1); C.eh=Math.max(0, C.eh-3);
+    floatDmg(252, 70, '-3', '#a8e0a0');
+    C.res='APARO! +1 Eco, contra-ataque 3.';
+    if (A.ctx&&A.on) tone('square',900,400,A.ctx.currentTime,0.08,0.12);
+  } else {
+    C.hp[C.tgt]=Math.max(0, C.hp[C.tgt]-C.foeDmg);
+    floatDmg(C.tgt?50:76, C.tgt?100:90, '-'+C.foeDmg, '#e8431f');
+    C.res=`${why} ${HERO_N[C.tgt]} perde ${C.foeDmg}.`; blip(90);
+  }
+  C.ph='res'; C.t=0;
+}
+function updCombat(dt){
+  C.t += dt;
+  if (C.floats){
+    for (const f of C.floats){ f.life -= dt; f.y -= dt*20; }
+    C.floats = C.floats.filter(f=>f.life>0);
+  }
+  const win = ()=>{ C.ph='win'; C.t=0; C.res='A Sombra de Pó se desfaz em silêncio.'; };
+  if (C.ph==='anim' && C.t>0.7){
+    if (C.eh<=0) win();
+    else if (C.beat>=2){ C.ph='tele'; C.t=0; C.tgt=nextTarget(); }
+    else { C.ph='menu'; C.sel=0; }
+  } else if (C.ph==='tele' && C.t>TELE+parryWin()) resolveParry(false,'Tarde demais.');
+  else if (C.ph==='res' && C.t>0.8){
+    if (C.eh<=0) win();
+    else if (C.hp[0]+C.hp[1]<=0){ C.ph='lose'; C.t=0; C.res='A Névoa pesa… mas o tambor ainda bate.'; }
+    else {
+      C.beat++;
+      if (C.beat>=4){ C.beat=0; C.round++; C.actions=[]; C.ph='menu'; C.sel=0; C.res='Sua vez: escolha uma ação.'; }
+      else { C.ph='tele'; C.t=0; if (C.hp[C.tgt]<=0) C.tgt=1-C.tgt; }
+    }
+  } else if (C.ph==='win' && C.t>2) endCombat();
+  else if (C.ph==='lose' && C.t>2){ if (C.kind==='arauto') endCombat(); else { startCombat(C.foe); C.res='Vocês se levantam. De novo.'; } }
+}
+function endCombat(){
+  const won = C.eh<=0, kind=C.kind;
+  const i=ents.indexOf(C.foe); if (i>=0) ents.splice(i,1);
+  if (kind==='arauto'){
+    S.arautoDown=true; S.mode='play'; C=null;
+    if (won) reg('Arauto Branco');
+    say(won?'arautoWin':'arautoLose');
+  } else if (kind==='esva'){
+    S.esvaDown=true; S.mode='play'; C=null;
+    say('esvaWin');
+  } else {
+    S.foeDown=true; S.mode='play'; C=null;
+    say('foeWin');
+  }
+}
+
+const R = (c,x,y,w,h)=>{ ctx.fillStyle=c; ctx.fillRect(Math.floor(x),Math.floor(y),w,h); };
+const hs = (x,y)=> ((Math.imul(x+1,73856093) ^ Math.imul(y+1,19349663))>>>0)%100;
+function txt(s,x,y,c='#fff',sz=8,al='left'){
+  const size = Math.round(sz * SETTINGS.textScale);
+  ctx.font=`bold ${size}px "Courier New",monospace`;
+  ctx.textAlign=al; ctx.textBaseline='top';
+  ctx.fillStyle='#000'; ctx.fillText(s,x+1,y+1);
+  ctx.fillStyle=c; ctx.fillText(s,x,y);
+}
+
+function tile(c,x,y,tx,ty){
+  const h=hs(tx,ty);
+  if (c==='.'||c===','||c==='T'){
+    const g=c===',';
+    R(g?'#d3ab6c':'#b9894a',x,y,TS,TS);
+    R(g?'#bf9657':'#a37640',x+h%12,y+h*7%13,2,1);
+    R(g?'#e0bd82':'#caa05c',x+h*3%11,y+h*5%14,1,1);
+    if (c==='.'&&h<18){ R('#8a9a3c',x+4,y+8,1,3); R('#8a9a3c',x+6,y+9,1,2); }
+    if (c==='T'){ R('#5a3a22',x+7,y+7,2,9); R('#3f5a24',x+1,y+1,14,8); R('#5a7a30',x+3,y+2,9,4); }
+  } else if (c==='='){
+    R('#7a6a58',x,y,TS,TS); R('#5c4e40',x,y+7,TS,1);
+    R('#5c4e40',x+7+h%3,y,1,8); R('#8d7c68',x+h%10,y+2+h%4,3,2);
+  } else if (c==='~'){
+    R('#1d3a5c',x,y,TS,TS);
+    R('#2a5078',x+(h+Math.floor(S.t*3))%11,y+h%12,5,1);
+    R('#3a6a9a',x+(h*3+Math.floor(S.t*2))%12,y+3+h%9,3,1);
+  } else if (c==='H'||c==='D'){
+    R('#a4502f',x,y,TS,TS); R('#8a3f24',x,y+13,TS,3);
+    R('#b8623d',x+2,y+3,5,1); R('#b8623d',x+9,y+8,4,1);
+    if (c==='D') R('#3b2012',x+4,y+3,8,13);
+  } else if (c==='R'){
+    R('#d9b45a',x,y,TS,TS);
+    for (let i=0;i<4;i++) R('#b8923c',x,y+i*4+3,TS,1);
+    R('#8a6a28',x,y+TS-1,TS,1);
+  } else if (c==='B'){
+    R('#7a5a3a',x,y,TS,TS); R('#5c4129',x+2,y,2,TS); R('#8d6b47',x+9,y,3,TS);
+    R('#5c4129',x+13,y+h%8,1,5);
+    if (S.stage>=2 && h%3===0) R('#7a5a3a',x+5,y+6,4,3);
+    else if (h%3===0) R(S.stage>=1?'#f0a830':'#a8845a',x+5,y+6,4,1);
+  } else if (c==='C'){
+    R('#3f5a24',x,y,TS,TS); R('#567a30',x+h%9,y+h*3%9,6,4); R('#2f4a1c',x+h*7%8,y+10,5,4);
+  }
+}
+
+function body(x,y,d,mv,fr,c){
+  const k=c.k?1:0, lh=k?3:6, th=k?6:9, ox=Math.floor(x)-8, by=Math.floor(y), b=mv&&fr?1:0;
+  const lt=by-lh, tt=lt-th;
+  R('rgba(0,0,0,.28)',ox+2,by-2,12,3);
+  R(c.pants,ox+4,lt,3,lh-(mv&&fr?1:0)); R(c.pants,ox+9,lt,3,lh-(mv&&!fr?1:0));
+  if (c.skirt) R(c.shirt,ox+3,lt-1,10,lh+1);
+  R(c.shirt,ox+3,tt-b,10,th);
+  R(c.shirt,ox+1,tt+1-b,2,th-2); R(c.shirt,ox+13,tt+1-b,2,th-2);
+  R(c.skin,ox+1,tt+th-2-b,2,2); R(c.skin,ox+13,tt+th-2-b,2,2);
+  R(c.skin,ox+4,tt-7-b,8,7);
+  R(c.hair,ox+3,tt-8-b,10,d===1?7:3);
+  if (c.wrap) R(c.wrap,ox+3,tt-9-b,10,4);
+  if (d!==1){
+    if (d===0){ R('#120a06',ox+5,tt-4-b,2,2); R('#120a06',ox+9,tt-4-b,2,2); }
+    else R('#120a06',ox+(d===2?4:10),tt-4-b,2,2);
+    if (c.beard) R(c.hair,ox+5,tt-1-b,6,2);
+    if (c.acc) R(c.acc,ox+7,tt+2-b,2,2);
+  }
+  if (c.patch){ R('#e0a030',ox+4,tt+5-b,2,2); R('#3a6a4a',ox+10,tt+3-b,2,2); }
+}
+function fire(e){
+  const F=FIRES[e.i], x=Math.floor(e.x), y=Math.floor(e.y), t=S.t;
+  R('#5b4a3a',x-7,y-3,14,4); R('#3a2a20',x-5,y-6,10,3);
+  if (S.fires[e.i]){
+    const h=Math.floor(7+sin(t*9+e.i)*2);
+    R(F.c,x-4,y-6-h,8,h); R('#fff2b0',x-2,y-6-(h>>1),4,h>>1);
+    R(F.c,x-2+Math.floor(sin(t*7+e.i*2)*2),y-8-h,3,3);
+  } else R(F.c,x-1,y-7,2,2);
+}
+function foeSpr(x,y,t){
+  const b=Math.round(sin(t*3));
+  R('rgba(0,0,0,.3)',x-8,y-2,16,3);
+  R('#2a2438',x-7,y-14+b,14,12); R('#3a3350',x-5,y-17+b,10,6);
+  R('#d9d9e8',x-4,y-12+b,2,2); R('#d9d9e8',x+2,y-12+b,2,2);
+  for (let i=0;i<6;i++) R('#4a4560',x-8+((i*5+Math.floor(t*4))%16),y-5+(i%3)*2,2,2);
+}
+function arautoSpr(x,y,t){
+  const b=Math.round(sin(t*2));
+  R('rgba(255,255,255,.15)',x-14,y-34+b,28,34);
+  R('#e8e8ee',x-10,y-30+b,20,26);
+  R('#c8c8d2',x-6,y-26+b,12,18);
+  R('#f4f4fa',x-8,y-36+b,16,8);
+  for (let i=0;i<8;i++) R('rgba(232,232,238,.5)',x-12+((i*7+Math.floor(t*3))%24),y-8+(i%3)*2,2,2);
+}
+function esvaSpr(x,y,t){
+  const b=Math.round(sin(t*2.5));
+  R('rgba(0,0,0,.3)',x-7,y-2,14,3);
+  R('#e8e8ec',x-6,y-14+b,12,12);
+  R('#d0d0d6',x-4,y-16+b,8,4);
+  R('#3a3540',x-3,y-11+b,2,2); R('#3a3540',x+1,y-11+b,2,2);
+  R('#e8e8ec',x-8,y-6+b,16,3);
+}
+function tamborSpr(x,y,t){
+  const b=Math.round(sin(t*3));
+  R('rgba(0,0,0,.3)',x-8,y-2,16,3);
+  R('#5a3a22',x-7,y-12+b,14,10);
+  R('#8a5a2a',x-6,y-11+b,12,2);
+  R('#d9b45a',x-7,y-14+b,14,2);
+  R('#c9a040',x-5+Math.floor(sin(t*4)*2),y-13+b,2,1);
+}
+function face(c,x,y){
+  R('#0a0608',x-1,y-1,34,34); R('#2a1a22',x,y,32,32);
+  R(c.skin,x+4,y+10,24,20); R(c.hair,x+2,y+5,28,8);
+  if (c.wrap) R(c.wrap,x+2,y+2,28,11);
+  R('#120a06',x+9,y+18,4,4); R('#120a06',x+19,y+18,4,4);
+  if (c.specs){ R('#d9b45a',x+7,y+16,8,1); R('#d9b45a',x+17,y+16,8,1); R('#d9b45a',x+7,y+24,8,1); R('#d9b45a',x+17,y+24,8,1); }
+  if (c.beard) R(c.hair,x+8,y+25,16,5);
+  R(c.shirt,x+2,y+30,28,2);
+}
+function drawFog(){
+  const mem = LV ? (S.memoria[LV.id] ?? 100) : 100;
+  const f = 0.55 * (1 - mem/100);
+  if (f<=0) return;
+  R(`rgba(210,215,230,${f*0.5})`,0,0,VW,VH);
+  for (let i=0;i<f*180;i++) R('rgba(235,235,245,.55)',Math.random()*VW,Math.random()*VH,2,1);
+}
+function drawCombat(){
+  R('#0e1428',0,0,VW,VH); R('#16203a',0,28,VW,60); R('#2a2438',0,118,VW,62); R('#3a3350',0,118,VW,2);
+  body(76,112,3,false,0,PAL.akin); body(50,124,3,false,0,PAL.amo);
+  if (C.kind==='arauto'){ ctx.save(); ctx.translate(252,122); ctx.scale(2.5,2.5); arautoSpr(0,0,S.t); ctx.restore(); }
+  else if (C.kind==='esva'){ ctx.save(); ctx.translate(252,122); ctx.scale(2.5,2.5); esvaSpr(0,0,S.t); ctx.restore(); }
+  else { ctx.save(); ctx.translate(252,122); ctx.scale(3,3); foeSpr(0,0,S.t); ctx.restore(); }
+
+  const beatLabels = C.kind==='esva' ? ['Akin','Amora','Vaga','Repete'] : ['Akin','Amora','Sombra','Repete'];
+  beatLabels.forEach((n,i)=>{
+    const x=34+i*62, on=i===C.beat && C.ph!=='win';
+    R(on?'#ffd36a':'#d9b45a',x-1,7,58,17); R(on?'#5a3a1a':'#1a0f14',x,8,56,15);
+    txt(n,x+28,12,i<C.beat?'#7a6a5a':'#f4e8cc',8,'center');
+  });
+
+  if (SETTINGS.visualMetronome){
+    const beatX = 34 + (C.beat||0) * 62 + 28;
+    R('#fff2b0', beatX-1, 2, 3, 3);
+    R('#ffd36a', beatX-3, 4, 7, 1);
+  }
+
+  txt(C.res,VW/2,30,'#f4e8cc',8,'center');
+  const bar=(x,y,v,m,c)=>{ R('#000',x,y,62,6); R(c,x+1,y+1,Math.max(0,60*v/m),4); };
+  const foeName = C.kind==='arauto'?'Arauto Branco':C.kind==='esva'?'Esvaziado':'Sombra de Pó';
+  const foeCol  = C.kind==='arauto'?'#e8e8ee':C.kind==='esva'?'#c9c9d2':'#8a8ab0';
+  txt(foeName,252,44,'#c9c9e0',8,'center'); bar(221,54,C.eh,C.emax,foeCol);
+
+  R('rgba(14,8,12,.92)',4,124,312,52);
+  txt('Akin',10,128,'#f4e8cc'); bar(46,129,C.hp[0],C.max[0],'#e8431f'); txt(`${C.hp[0]}/${C.max[0]}`,112,128,'#f4e8cc');
+  txt('Amora',10,140,'#f4e8cc'); bar(46,141,C.hp[1],C.max[1],'#f0a830'); txt(`${C.hp[1]}/${C.max[1]}`,112,140,'#f4e8cc');
+  txt('Eco',10,154,'#f4e8cc'); for (let i=0;i<4;i++) R(i<C.eco?FIRES[i].c:'#4a3a34',46+i*12,154,9,7);
+
+  if (C.ph==='menu'){
+    const opts = combatOptions();
+    opts.forEach((o,i)=> txt((i===C.sel?'> ':'  ')+o.label, 170, 130+i*9, i===C.sel?'#ffd36a':'#c9b88e'));
+    txt('↑↓ escolhe · E confirma',170,168,'#8a7a6a');
+  } else if (C.ph==='chamar_select'){
+    txt('CHAMAR PELO NOME:',170,128,'#ffd36a');
+    C.chamarOptions.forEach((n,i)=> txt((i===C.sel?'> ':'  ')+n, 170, 142+i*10, i===C.sel?'#ffd36a':'#c9b88e'));
+  } else if (C.ph==='tele'){
+    const open=C.t>=TELE, hx=C.tgt?50:76, hy=(C.tgt?124:112)-14;
+    ctx.strokeStyle=open?'#ffffff':'#ffd36a'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(hx,hy,open?6:6+(TELE-C.t)/TELE*30,0,Math.PI*2); ctx.stroke();
+    txt(open?'APARE!':'Espere o brilho…',170,132,open?'#ffffff':'#ffd36a');
+  }
+
+  if (C.floats) for (const f of C.floats){
+    ctx.globalAlpha = Math.min(1, f.life*2);
+    txt(f.text, f.x, f.y, f.color, 10, 'center');
+    ctx.globalAlpha = 1;
+  }
+}
+function drawLight(){
+  const vila = LV.id==='vila';
+  const a = vila ? 0.1+lit()*0.11+(S.stage>=2?0.1:0) : 0.3;
+  lx.globalCompositeOperation='source-over';
+  lx.clearRect(0,0,VW,VH);
+  lx.fillStyle = vila ? `rgba(16,10,44,${a})` : `rgba(8,14,40,${a})`;
+  lx.fillRect(0,0,VW,VH);
+  lx.globalCompositeOperation='destination-out';
+  const src=[];
+  if (vila){ for (const e of ents) if (e.k==='fire' && S.fires[e.i]) src.push([e.x,e.y-8,62+sin(S.t*8+e.i)*3,FIRES[e.i].c]); }
+  else for (const [x,y] of LV.lamps) src.push([x,y,46+sin(S.t*3+x)*2,'#f0c060']);
+  for (const [x,y,r] of src){
+    const gx=x-CX, gy=y-CY, g=lx.createRadialGradient(gx,gy,3,gx,gy,r);
+    g.addColorStop(0,'rgba(0,0,0,.95)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    lx.fillStyle=g; lx.fillRect(gx-r,gy-r,r*2,r*2);
+  }
+  ctx.drawImage(lc,0,0);
+  ctx.globalCompositeOperation='lighter';
+  for (const [x,y,r,c] of src){
+    const gx=x-CX, gy=y-CY, g=ctx.createRadialGradient(gx,gy,2,gx,gy,r);
+    g.addColorStop(0,c+'44'); g.addColorStop(1,c+'00');
+    ctx.fillStyle=g; ctx.fillRect(gx-r,gy-r,r*2,r*2);
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+function drawDlg(){
+  const d=S.dlg, nd=d.nd, L=d.lines, done=typed(d), nc=nd.c?nd.c.length:0, pc=PORT[nd.w], ox=pc?40:0;
+  const lh = 10*SETTINGS.textScale;
+  const bh=Math.max(pc?46:0,14+L.length*lh+(done?nc*lh:0)+4), bx=8, by=VH-bh-6, bw=VW-16;
+  R('#d9b45a',bx-1,by-1,bw+2,bh+2); R('#1a0f14',bx,by,bw,bh);
+  if (pc) face(pc,bx+6,by+7);
+  if (nd.w){ const w=nd.w.length*5+10; R('#d9b45a',bx+4,by-10,w,11); txt(nd.w,bx+9,by-9,'#1a0f14'); }
+  let rem=Math.floor(d.n);
+  L.forEach((l,i)=>{ txt(l.slice(0,Math.max(0,rem)),bx+8+ox,by+6+i*lh,'#f4e8cc'); rem-=l.length; });
+  if (done&&nc) nd.c.forEach((c,i)=> txt((i===d.sel?'> ':'  ')+c.t,bx+12+ox,by+8+L.length*lh+i*lh,i===d.sel?'#ffd36a':'#c9b88e'));
+  else if (done && Math.floor(S.t*3)%2) txt('v',bx+bw-12,by+bh-12,'#ffd36a');
+}
+function drawWorld(){
+  CX=Math.floor(cam.x); CY=Math.floor(cam.y);
+  R('#000',0,0,VW,VH);
+  ctx.save(); ctx.translate(-CX,-CY);
+  for (let ty=Math.max(0,Math.floor(CY/TS)); ty<=Math.min(MH-1,Math.floor((CY+VH)/TS)); ty++)
+    for (let tx=Math.max(0,Math.floor(CX/TS)); tx<=Math.min(MW-1,Math.floor((CX+VW)/TS)); tx++)
+      tile(map[ty*MW+tx], tx*TS, ty*TS, tx, ty);
+  const list = ents.filter(e=>e.k!=='sign').concat([{ k:'hero', x:P.x, y:P.y }]);
+  if (S.amora && P.tr.length){ const f=P.tr[Math.max(0,P.tr.length-12)]; list.push({ k:'amo', x:f.x, y:f.y, d:f.d }); }
+  list.sort((a,b)=>a.y-b.y);
+  for (const e of list){
+    if (e.k==='fire') fire(e);
+    else if (e.k==='foe' && e.id==='esva') esvaSpr(e.x,e.y,S.t);
+    else if (e.k==='foe') foeSpr(e.x,e.y,S.t);
+    else if (e.k==='tambor') tamborSpr(e.x,e.y,S.t);
+    else if (e.k==='amo') body(e.x,e.y,e.d,P.mv,Math.floor(P.a)&1,PAL.amo);
+    else if (e.k==='hero') body(P.x,P.y,P.d,P.mv,Math.floor(P.a)&1,PAL.akin);
+    else body(e.x,e.y,e.d,false,0,e.p);
+  }
+  if (S.near && S.mode==='play'){
+    const e=S.near, by=e.y-(e.k==='npc'?34:e.k==='fire'?24:e.k==='foe'?26:e.k==='tambor'?18:18)+sin(S.t*6)*1.5;
+    R('#f4e8cc',e.x-5,by,10,10); R('#1a0f14',e.x-4,by+1,8,8);
+    txt(e.k==='foe'?'!':e.k==='tambor'?'♪':'E', e.x, by+1, '#ffd36a', 8, 'center');
+  }
+  ctx.restore();
+  drawLight();
+  if (LV.id==='porto') drawFog();
+}
+function drawHud(){
+  if (S.stage>=1 && S.stage<3){
+    R('rgba(26,15,20,.85)',6,6,62,14);
+    txt('Fogueiras',10,9,'#f4e8cc');
+    FIRES.forEach((F,i)=> R(S.fires[i]?F.c:'#4a3a34',52+i*4,10,3,6));
+  }
+  if (nomes()){ R('rgba(26,15,20,.85)',VW-74,6,68,14); txt(`Nomes ${nomes()}/${BOOK_TOTAL}`,VW-70,9,'#ffd36a'); }
+  if (LV.id==='porto'){
+    R('rgba(26,15,20,.85)',VW-74,22,68,12);
+    txt(`Memória ${S.memoria.porto}%`,VW-70,25, S.memoria.porto>=60?'#a8e0a0':'#e8b0a0');
+  }
+  if (S.banner>0){
+    ctx.globalAlpha=Math.min(1,S.banner);
+    txt(LV.name,VW/2,12,'#ffd36a',8,'center');
+    txt('Setas/WASD · E interagir · Shift correr · ESC pausa · H aparo',VW/2,24,'#f4e8cc',8,'center');
+    ctx.globalAlpha=1;
+  }
+  if (S.msgT>0 && S.mode!=='dlg'){
+    ctx.globalAlpha=Math.min(1,S.msgT);
+    txt(S.msg,VW/2,VH-20,'#ffd36a',8,'center');
+    ctx.globalAlpha=1;
+  }
+}
+function drawPause(){
+  R('rgba(0,0,0,.75)',0,0,VW,VH);
+  const bw=200, bh=100, bx=(VW-bw)/2, by=(VH-bh)/2;
+  R('#d9b45a',bx-2,by-2,bw+4,bh+4); R('#1a0f14',bx,by,bw,bh);
+  if (S.pauseState==='main'){
+    txt('PAUSA',VW/2,by+10,'#ffd36a',10,'center');
+    const opts=['Continuar','Opções','Sair para o título'];
+    opts.forEach((t,i)=> txt((i===S.pauseSel?'> ':'  ')+t, bx+20, by+32+i*14, i===S.pauseSel?'#ffd36a':'#c9b88e'));
+  } else {
+    txt('OPÇÕES',VW/2,by+10,'#ffd36a',10,'center');
+    const opts=[
+      `Tamanho do texto: ${SETTINGS.textScale.toFixed(2)}×`,
+      `Reduzir movimento: ${SETTINGS.reduceMotion?'Sim':'Não'}`,
+      `Metrônomo visual: ${SETTINGS.visualMetronome?'Sim':'Não'}`,
+      'Voltar'
+    ];
+    opts.forEach((t,i)=> txt((i===S.optSel?'> ':'  ')+t, bx+14, by+28+i*12, i===S.optSel?'#ffd36a':'#c9b88e'));
+    txt('ESC ou E volta',VW/2,by+bh-12,'#8a7a6a',8,'center');
+  }
+}
+function drawTitle(){
+  R('#1b0f14',0,0,VW,VH); R('#2a1620',0,96,VW,84); R('#3a2218',0,150,VW,30);
+  FIRES.forEach((F,i)=>{
+    const x=100+i*40, h=14+sin(S.t*6+i*1.7)*4;
+    R('#5b4a3a',x-8,140,16,5);
+    R(F.c,x-5,140-h,10,h); R('#fff2b0',x-2,140-h/2,4,h/2);
+    R(F.c,x-2+sin(S.t*5+i)*2,136-h,3,3);
+  });
+  txt('AS QUATRO CHAMAS',VW/2,22,'#f4e8cc',16,'center');
+  txt('DE NZILA',VW/2,42,'#ffd36a',16,'center');
+  txt('Vertical Slice v1.3 · Prólogo + início do Ato I',VW/2,66,'#c9b88e',8,'center');
+  txt('“Lembrar dói, mas esquecer não cura.”',VW/2,80,'#ffd36a',8,'center');
+  if (Math.floor(S.t*2)%2) txt('Espaço ou toque: Novo Jogo',VW/2,150,'#f4e8cc',8,'center');
+  if (hasSave()) txt('C: Continuar Save',VW/2,164,'#ffd36a',8,'center');
+}
+function drawEnd(){
+  R('#f2f0ea',0,0,VW,VH);
+  for (let i=0;i<70;i++) R('#d6d2c8',Math.random()*VW,Math.random()*VH,2,1);
+  txt('A porta do Arquivo Profundo se abriu.',VW/2,36,'#2a2630',8,'center');
+  txt('“Lembrar dói, mas esquecer não cura.”',VW/2,52,'#6a5a52',8,'center');
+  txt('FIM DO VERTICAL SLICE',VW/2,76,'#b4472a',16,'center');
+  txt('Prólogo · Vila Raiz  +  Ato I · Porto das Vozes',VW/2,98,'#2a2630',8,'center');
+  txt(`Nomes no Livro: ${nomes()}/${BOOK_TOTAL}  ·  Fogueiras: ${lit()}/4`,VW/2,112,'#6a5a52',8,'center');
+  txt(`Memória do Porto: ${S.memoria.porto}%  ·  Arauto: ${S.arautoDown?'✓':'—'}  ·  Esvaziado: ${S.esvaDown?'✓':'—'}`,VW/2,124,'#6a5a52',8,'center');
+  txt(`Reminiscência: ${S.reminiscenciaVista?'✓ O Dia da Travessia':'—'}`,VW/2,136,'#6a5a52',8,'center');
+  if (Math.floor(S.t*2)%2) txt('Espaço ou toque para recomeçar',VW/2,158,'#2a2630',8,'center');
+}
+function draw(){
+  if (S.mode==='title') return drawTitle();
+  if (S.mode==='end') return drawEnd();
+  if (S.mode==='cmb') drawCombat();
+  else { drawWorld(); drawHud(); }
+  if (S.white>0){
+    R(`rgba(242,240,234,${S.white})`,0,0,VW,VH);
+    for (let i=0;i<40*S.white;i++) R('rgba(200,196,186,.6)',Math.random()*VW,Math.random()*VH,2,1);
+  }
+  if (S.mode==='dlg') drawDlg();
+  if (S.mode==='pause') drawPause();
+  if (S.fade>0) R(`rgba(13,7,9,${S.fade})`,0,0,VW,VH);
+}
+
+let last = performance.now();
+function loop(ts){
+  const dt = Math.min(0.05, (ts-last)/1000 || 0); last=ts;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+reset();
+requestAnimationFrame(loop);
